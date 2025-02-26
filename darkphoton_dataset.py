@@ -130,7 +130,7 @@ class DarkPhotonDataset(InMemoryDataset):
         
         data_list = []
         # Attributes to retrieve for each graph.
-        attributes = ["eta", "phi", "energy", "energyabs"] 
+        attributes = ["eta", "phi", "energy"] # , "energyabs"] 
     
         # There should be 3 subdirectories: Signal, Background 1 and Background 2.
         
