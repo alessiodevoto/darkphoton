@@ -7,22 +7,23 @@ import re
 from torch_geometric.loader import DataLoader  # Use PyTorch Geometric's DataLoader
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
-from dataset import CustomEventsDataset2, MakeHomogeneous
-from model import Transformer
+from dataset.darkphotondataset import DarkPhotonDataset
+from dataset.transforms import GraphFilter
+from model.model import Transformer
 from utils import LoadBalancingLoss
-from train import evaluate
+from train.train import evaluate
 
 # ---- CONFIGURATION ----
 encoding_size = 4
-input_size = 12
-hidden_size = 80
-g_norm = True
-heads = 2
+input_size = 4
+hidden_size = 40
+g_norm = False
+heads = 4
 num_xprtz = 6
-xprt_size = 20
+xprt_size = 30
 k = 2
 dropout_encoder = 0.0
-layers = 2
+layers = 4
 output_size = 2
 batchsize = 500
 seed = 42
@@ -44,16 +45,14 @@ dataset_root = './data'
 os.makedirs(dataset_root, exist_ok=True)
 
 # ---- LOAD DATA ----
-datasetfull = CustomEventsDataset2(
-    root=dataset_root,
-    url='https://cernbox.cern.ch/s/0nh0g7VubM4ndoh/download',
-    k=encoding_size,
-    delete_raw_archive=False,
-    add_edge_index=True,
-    event_subsets={'signal': 400, 'singletop': 200, 'ttbar': 200},
-    transform=MakeHomogeneous(), 
-    signal_filter=lambda filename: "Wh_hbb_fullMix.h5" in filename
-)
+graph_filter = GraphFilter(min_num_nodes=2) # only graphs with at least 2 nodes will be accepted
+dataset = DarkPhotonDataset(root=dataset_root, 
+                            subset=0.5,
+                            url="https://cernbox.cern.ch/s/PYurUUzcNdXEGpz/download",
+                            pre_filter = graph_filter,
+                            pre_transform = None,
+                            post_filter = None, 
+                            verbose=True)
 
 trainset, testset = train_test_split(datasetfull, test_size=0.2)
 train_loader = DataLoader(trainset, batch_size=batchsize, shuffle=True)
