@@ -292,3 +292,4 @@ class Transformer(nn.Module):
         x = self.predict(x)  # Final prediction
 
         return x, average_load_balance, average_expert_std, all_sample_assignments
+
