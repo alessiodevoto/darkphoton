@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,8 +11,7 @@ import pandas as pd
 import os
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from torchmetrics.classification import AUROC  # don't forget to import this if using torchmetrics
-
-from train.train import train_evaluate, evaluate
+from train import train_evaluate, evaluate
 from utils import EmbedEncode, LoadBalancingLoss
 from dataset.darkphotondataset import DarkPhotonDataset
 from dataset.transforms import GraphFilter
@@ -30,22 +32,23 @@ print(f"Using device: {device}")
 # ---- CONFIGURATION ----
 encoding_size = 4
 
-input_size = 4
-hidden_size = 60
-g_norm = False
-heads = 4
-num_xprtz = 6
-xprt_size = 30
-k = 2
-dropout_encoder = 0.0
-layers = 4
-output_size = 2
-w_load = 1
-batchsize = 500
-epochs = 60
-patience = 45
-gamma = 0.1
-learning_rate = 0.005
+input_size = 4  # fixed
+hidden_size = 80  # hidden size of the modules
+encoding_size = 4  # size of the positional encoding
+g_norm = False  # normalized or unnormalized data
+heads = 2  # number of attention heads
+num_xprtz = 6  # number of experts of the moe layer
+xprt_size = 30  # hidden size of each expert
+k = 2  # top k experts to activate at a time
+dropout_encoder = 0.2  # dropout probability
+layers = 2  # number of endoder blocks in the transformer
+output_size = 2  # fixed
+w_load = 1  # weight of the load balancing loss
+batchsize = 256
+epochs = 80
+patience = 45  # patience of the stepper
+gamma = 0.1  # multiplicative factor for the stepper
+learning_rate = 0.002
 stepper = True
 con = str(str(input_size)+str(hidden_size)+str(encoding_size)+str(g_norm)+str(heads)+str(num_xprtz)+str(xprt_size)+str(k)+str(dropout_encoder)+str(layers)+str(output_size)+str(w_load)+str(batchsize)+str(epochs)+str(patience)+str(gamma)+str(learning_rate)+str(stepper)+str("prova"))
 
@@ -53,7 +56,7 @@ save_path = f'./results/{con}'
 os.makedirs(save_path, exist_ok=True)
 
 # ---- SET RANDOM SEEDS ----
-seed = 42
+seed = 3958239256
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
     torch.cuda.manual_seed(seed)
@@ -69,14 +72,14 @@ os.makedirs(dataset_root, exist_ok=True)
 # ---- LOAD DATA ----
 graph_filter = GraphFilter(min_num_nodes=2) # only graphs with at least 2 nodes will be accepted
 dataset = DarkPhotonDataset(root=dataset_root, 
-                            subset=0.5,
+                            subset=1.0,
                             url="https://cernbox.cern.ch/s/PYurUUzcNdXEGpz/download",
                             pre_filter = graph_filter,
                             pre_transform = None,
                             post_filter = None, 
                             verbose=True)
 
-trainset, testset = train_test_split(datasetfull, test_size=0.2)
+trainset, testset = train_test_split(dataset, test_size=0.2)
 trainset, evalset = train_test_split(trainset, test_size=0.2)
 
 # ---- BUILD MODEL ----
