@@ -34,17 +34,22 @@ batchsize = 256
 seed = 3958239256
 model_ckpt_path = '/hdd3/dongen/Desktop/DarkPhoton/darkphoton/results/4804False263020.222125680450.10.002Trueprova/final_model.pt'
 output_dir = './evaluation_outputs'
+seeds_to_test = [seed] + [] 
 
 os.makedirs(output_dir, exist_ok=True)
 
 # ---- SET SEEDS ----
-torch.manual_seed(seed)
-np.random.seed(seed)
-random.seed(seed)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+def set_seeds(seed):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seeds(seed)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 dataset_root = './data'
 os.makedirs(dataset_root, exist_ok=True)
@@ -77,43 +82,45 @@ model.eval()
 criterion = torch.nn.CrossEntropyLoss()
 loss = LoadBalancingLoss(criterion, 0)
 
-# ---- EVALUATION ----
-result = evaluate(test_loader, model, loss, device)
-predictions = torch.argmax(torch.cat(result[0]), dim=1)
-truths = torch.cat(result[1])
-which_node = torch.cat(result[4], dim=-1).cpu()
+for seed in seeds_to_test:
+    set_seeds(seed)
+    # ---- EVALUATION ----
+    result = evaluate(test_loader, model, loss, device)
+    predictions = torch.argmax(torch.cat(result[0]), dim=1)
+    truths = torch.cat(result[1])
+    which_node = torch.cat(result[4], dim=-1).cpu()
 
-# Save evaluation metrics
-acc = accuracy_score(truths.cpu(), predictions.cpu())
-precision = precision_score(truths.cpu(), predictions.cpu())
-recall = recall_score(truths.cpu(), predictions.cpu())
-test_auroc_sklearn = roc_auc_score(truths.cpu(), torch.cat(result[0])[:, 1].cpu())
+    # Save evaluation metrics
+    acc = accuracy_score(truths.cpu(), predictions.cpu())
+    precision = precision_score(truths.cpu(), predictions.cpu())
+    recall = recall_score(truths.cpu(), predictions.cpu())
+    test_auroc_sklearn = roc_auc_score(truths.cpu(), torch.cat(result[0])[:, 1].cpu())
 
-confmat = confusion_matrix(truths.cpu(), predictions.cpu())
-print(f"Accuracy: {acc:.4f}, AUROC: {test_auroc_sklearn:.4f}")
+    confmat = confusion_matrix(truths.cpu(), predictions.cpu())
+    print(f"Accuracy: {acc:.4f}, AUROC: {test_auroc_sklearn:.4f}")
 
-np.savez_compressed(os.path.join(output_dir, 'eval_outputs.npz'),
-                    predictions=predictions.cpu().numpy(),
-                    truths=truths.cpu().numpy(),
-                    which_node=which_node.numpy(),
-                    acc=acc, precision=precision, recall=recall,
-                    confmat=confmat)
+    np.savez_compressed(os.path.join(output_dir, f'eval_outputs_{seed}.npz'),
+                        predictions=predictions.cpu().numpy(),
+                        truths=truths.cpu().numpy(),
+                        which_node=which_node.numpy(),
+                        acc=acc, precision=precision, recall=recall,
+                        confmat=confmat)
 
-# ---- METADATA FOR VISUALIZATION ----
-graph_labels = []
-node_counts = []
-node_type_ids = []
+    # ---- METADATA FOR VISUALIZATION ----
+    graph_labels = []
+    node_counts = []
+    node_type_ids = []
 
-for i in testset:
-    label = int(i.y.item())
-    graph_labels.append(label)
-    num_nodes = i.x.shape[0]
-    node_counts.append(num_nodes)
-    node_type_ids.extend(list(range(num_nodes)))  # Sequential node types
+    for i in testset:
+        label = int(i.y.item())
+        graph_labels.append(label)
+        num_nodes = i.x.shape[0]
+        node_counts.append(num_nodes)
+        node_type_ids.extend(list(range(num_nodes)))  # Sequential node types
 
-np.savez_compressed(os.path.join(output_dir, 'test_metadata.npz'),
-                    graph_labels=np.array(graph_labels, dtype=np.int32),
-                    node_counts=np.array(node_counts, dtype=np.int32),
-                    node_type_ids=np.array(node_type_ids, dtype=np.int32))
+    np.savez_compressed(os.path.join(output_dir, f'test_metadata_{seed}.npz'),
+                        graph_labels=np.array(graph_labels, dtype=np.int32),
+                        node_counts=np.array(node_counts, dtype=np.int32),
+                        node_type_ids=np.array(node_type_ids, dtype=np.int32))
 
-print(f"Saved evaluation metadata to {output_dir}")
+    print(f"Saved evaluation metadata to {output_dir}")
