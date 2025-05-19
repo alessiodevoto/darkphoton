@@ -116,7 +116,7 @@ class MoeveForward(nn.Module):
         # Compute the noise values using the noise network and Softplus activation
         router_noise = self.softplus(self.noise_network(input))
 
-        # Add random noise to the router's logits to introduce stochasticity
+        # Add random noise to the router's logits to introduce stochasticity both for training and also evaluation in this case
         routing_logits_noisy = router_logits + torch.randn(self.num_experts, device=device) * router_noise #(input_size,num_experts)
 
         # Select the top-k experts based on the noisy routing logits
