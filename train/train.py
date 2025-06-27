@@ -66,18 +66,25 @@ def train(dataloader, model, loss_fn, optimizer, device):
 
 
 # Evaluation function (similar to training but without gradient updates)
-def evaluate(dataloader, model, loss_fn, device):
-    model.eval()  # Set model to evaluation mode
+def evaluate(dataloader, model, loss_fn, device, use_noisy_routing=False):
+    #model.eval()  # Set model to evaluation mode
     predictions = []
     ground_truths = []
     losses = []
     expert_loads = []  # Load distribution tensor of shape (num_experts)
     expert_sample_counts = []  # Tensor of shape (num_experts) tracking samples processed
     node_expert_assignments = []  # Tensor tracking node-to-expert assignment across layers
+    routing_logits = []
 
     with torch.no_grad():  # Disable gradient computation for efficiency
         for batch in dataloader:
-            prediction = model(batch.to(device))  # Forward pass
+            prediction = model(batch.to(device), use_noisy_routing=use_noisy_routing)  # Forward pass
+
+            # Inspect routing logits for each encoder layer
+            #for layer_idx, logits in prediction[4]:
+            #    print(f"Layer {layer_idx} routing logits shape: {logits.shape}")
+            #    print(logits)
+
             batch_loss = loss_fn(prediction, batch.y)  # Compute loss
 
             # Store results
@@ -87,9 +94,9 @@ def evaluate(dataloader, model, loss_fn, device):
             expert_loads.append(prediction[1])
             expert_sample_counts.append(prediction[2])
             node_expert_assignments.append(prediction[3])
+            routing_logits.append(prediction[4])
 
-    return predictions, ground_truths, expert_loads, expert_sample_counts, node_expert_assignments
-
+    return predictions, ground_truths, expert_loads, expert_sample_counts, node_expert_assignments, routing_logits
 
 # Training and evaluation loop
 def train_evaluate(trainloader, evalloader, model, criterion, loss_fn, optimizer, scheduler, patience, epochs, device, save_dir="training_outputs"):
