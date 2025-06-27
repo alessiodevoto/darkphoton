@@ -80,4 +80,3 @@ else:
         temp += num_xprtz
     fig.tight_layout()
     fig.savefig(f"{output_dir}/specialization_node_type_layers.png", bbox_inches='tight')
-
