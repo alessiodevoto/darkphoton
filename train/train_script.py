@@ -11,7 +11,7 @@ import pandas as pd
 import os
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from torchmetrics.classification import AUROC  # don't forget to import this if using torchmetrics
-from train import train_evaluate, evaluate
+from train.train import train_evaluate, evaluate
 from utils import EmbedEncode, LoadBalancingLoss
 from dataset.darkphotondataset import DarkPhotonDataset
 from dataset.transforms import GraphFilter
@@ -81,7 +81,6 @@ dataset = DarkPhotonDataset(root=dataset_root,
 
 trainset, testset = train_test_split(dataset, test_size=0.2)
 trainset, evalset = train_test_split(trainset, test_size=0.2)
-
 # ---- BUILD MODEL ----
 model = Transformer(input_size, hidden_size, encoding_size, g_norm, heads, num_xprtz, xprt_size, k, dropout_encoder, layers, output_size).to(device)
 
@@ -155,4 +154,6 @@ test_df.to_csv(os.path.join(save_path, 'test_metrics.csv'), index=False)
 # Save model
 torch.save(model.state_dict(), os.path.join(save_path, 'final_model.pt'))
 print(f"Training complete. Model and metrics saved in '{save_path}'")
+
+
 
