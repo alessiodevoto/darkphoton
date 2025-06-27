@@ -80,16 +80,13 @@ class MoeveForward(nn.Module):
         super().__init__()
         
         # Define a single expert: A simple feedforward neural network (FFN)
-        self.expert = nn.Sequential(
-            nn.Linear(input_size, xprt_size),  # Linear layer: input -> hidden
-            nn.LeakyReLU(),                    # Activation function
-            nn.Linear(xprt_size, input_size),  # Linear layer: hidden -> output
-            nn.Dropout(dropout)                # Dropout for regularization
-        )
-        
-        
-        # Combine multiple experts using ModuleList
-        self.experts = nn.ModuleList([self.expert for _ in range(num_experts)])
+        self.experts = nn.ModuleList([
+                    nn.Sequential(
+                    nn.Linear(input_size, xprt_size),
+                    nn.LeakyReLU(),
+                    nn.Linear(xprt_size, input_size),
+                    nn.Dropout(dropout)
+                    ) for _ in range(num_experts)])
 
         # Define a noise network to introduce randomness in the routing process
         self.noise_network = nn.Linear(input_size, num_experts, bias=False)
@@ -105,9 +102,11 @@ class MoeveForward(nn.Module):
         self.k = k  # Number of top-k experts to select
 
         # Initialize the weights of the noise network to zero
-        torch.nn.init.zeros_(self.noise_network.weight)
+        #torch.nn.init.zeros_(self.noise_network.weight)
+        torch.nn.init.normal_(self.noise_network.weight, mean=0.0, std=0.1)
 
-    def forward(self, input):
+
+    def forward(self, input, use_noisy_routing=False):
         
         device = input.device
         # Compute the routing logits from the router network
@@ -115,9 +114,34 @@ class MoeveForward(nn.Module):
 
         # Compute the noise values using the noise network and Softplus activation
         router_noise = self.softplus(self.noise_network(input))
+    
+        
+        # Add noise if training or if explicitly enabled during evaluation
+        if self.training or use_noisy_routing:
+            
+                      # Temporarily increase noise magnitude for debugging
+           # You might need to experiment with the scaling factor
+           #noise_scale_factor = 5.0 # For example, amplify noise by 5x
+           #routing_logits_noisy = router_logits + torch.randn_like(router_logits) * (router_noise * noise_scale_factor)
+           routing_logits_noisy = router_logits + torch.randn_like(router_logits) * router_noise
+           #print(f"DEBUG: First few elements of noisy_routing for seed {torch.initial_seed()}: {routing_logits_noisy.flatten()[:5]}")
 
-        # Add random noise to the router's logits to introduce stochasticity both for training and also evaluation in this case
-        routing_logits_noisy = router_logits + torch.randn(self.num_experts, device=device) * router_noise #(input_size,num_experts)
+        else:
+           routing_logits_noisy = router_logits  # deterministic routing
+           
+        #Debug: Print top-k values and indices for a few samples
+        # Assuming routing_logits_noisy has shape [num_nodes, num_experts] or similar
+        # For simplicity, let's take the first 5 nodes/tokens in the batch
+        
+        num_samples_to_debug = 1
+
+        topk_values, topk_indices = torch.topk(routing_logits_noisy, k=self.k, dim=-1)
+
+        #print(f"\n--- DEBUGGING TOPK SELECTION") # Assuming current_seed is accessible
+        #print("Top-k values for first few samples:")
+        #print(topk_values[:num_samples_to_debug].cpu().numpy())
+        #print("Top-k indices for first few samples:")
+        #print(topk_indices[:num_samples_to_debug].cpu().numpy())
 
         # Select the top-k experts based on the noisy routing logits
         topk_weights, selected_experts = torch.topk(routing_logits_noisy, self.k) # `weights`: top-k values, `experts`: top-k indices #(input_size, k)
@@ -168,7 +192,8 @@ class MoeveForward(nn.Module):
             expert_sample_count[expert_idx] += len(assigned_nodes)
 
         # Return the output, loads, sample counts, and assignment tracking
-        return output_tensor, expert_loads, expert_sample_count, sample_to_expert_assignment
+        return output_tensor, expert_loads, expert_sample_count, sample_to_expert_assignment, routing_logits_noisy
+
 
 
 
@@ -207,17 +232,17 @@ class Encoder(nn.Module):
         self.normalize2 = nn.LayerNorm(hidden_size)
         self.drop = nn.Dropout(dropout)
 
-    def forward(self, x, Adj):
+    def forward(self, x, Adj, use_noisy_routing=False):
         input = x
-        x, _ = self.attend(x,Adj)
+        x, _ = self.attend(x, Adj)
         x = self.normalize1(input + x)
         x = self.drop(x)
-        y, expert_loads, expert_sample_count, sample_to_expert_assignment = self.moveforward(x)
-        y = self.normalize2(x + y) 
-        load_balance = (torch.std(expert_loads) / torch.mean(expert_loads))**2 #squared normalized variance of load
-    
-        return y, load_balance, expert_sample_count, sample_to_expert_assignment
+        y, expert_loads, expert_sample_count, sample_to_expert_assignment, routing_logits_noisy = self.moveforward(x,use_noisy_routing)
+        y = self.normalize2(x + y)
+        load_balance = (torch.std(expert_loads) / torch.mean(expert_loads))**2  # Squared normalized variance of load
 
+        # Return routing_logits_noisy along with other outputs
+        return y, load_balance, expert_sample_count, sample_to_expert_assignment, routing_logits_noisy
 
 
 """
@@ -264,7 +289,7 @@ class Transformer(nn.Module):
         self.num_xprtz = num_xprtz  # Number of experts
         self.layers = layers  # Number of encoder layers
 
-    def forward(self, x):
+    def forward(self, x, use_noisy_routing=False):
         batch_indices = x.batch  # Extract batch indices for graph-level pooling
         Adj = to_dense_adj(x.edge_index)  # Convert edge indices to dense adjacency matrix
         x = self.embed(x)  # Apply embedding layer
@@ -274,13 +299,16 @@ class Transformer(nn.Module):
         load_balances = torch.zeros(self.layers, device=device)  # Initialize load balancing tensor
         expert_std_devs = torch.zeros(self.layers, device=device)  # Initialize expert standard deviation tensor
         all_sample_assignments = torch.empty(0, x.shape[0], device=device)  # Initialize sample assignment tensor
+        all_routing_logits = []  # List to store routing logits from all encoders
 
         for i, encoder in enumerate(self.encoders):
             # Pass through each encoder layer
-            x, load_balance, expert_sample_count, sample_to_expert_assignment = encoder(x, Adj)
+            x, load_balance, expert_sample_count, sample_to_expert_assignment, routing_logits_noisy = encoder(x, Adj, use_noisy_routing)
+            #print(type(routing_logits_noisy))
             load_balances[i] += load_balance  # Accumulate load balance
             expert_std_devs[i] += torch.std(expert_sample_count)  # Accumulate expert standard deviation
             all_sample_assignments = torch.cat([all_sample_assignments, sample_to_expert_assignment], dim=0)  # Track sample assignments
+            all_routing_logits.append((i, routing_logits_noisy))  # Store encoder index and routing logits
 
         # Compute averages
         average_expert_std = torch.mean(expert_std_devs, dim=0)  # Compute average standard deviation
@@ -291,5 +319,6 @@ class Transformer(nn.Module):
         x = self.pool(x, batch_indices)  # Apply global mean pooling
         x = self.predict(x)  # Final prediction
 
-        return x, average_load_balance, average_expert_std, all_sample_assignments
+        # Return predictions, load balance, expert std, sample assignments, and routing logits
+        return x, average_load_balance, average_expert_std, all_sample_assignments, all_routing_logits
 
