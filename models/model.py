@@ -40,7 +40,7 @@ class MHGAttend(nn.Module):
         q = q.view(q.shape[0], self.heads, self.head_size).transpose(0,1)  # \
         k = k.view(k.shape[0], self.heads, self.head_size).transpose(0,1)  #  |=>  (heads, nodebatch, head_size) compute the linear projection
         v = v.view(v.shape[0], self.heads, self.head_size).transpose(0,1)  # /
-        attention_scores = (q @ v.transpose(-2,-1)) / np.sqrt(self.head_size)  #  (heads,nodebatch,head_size)*(heads,head_size,nodebatch) 
+        attention_scores = (q @ k.transpose(-2,-1)) / np.sqrt(self.head_size)  #  (heads,nodebatch,head_size)*(heads,head_size,nodebatch) 
         attention_scores.masked_fill_(Adj == 0, -1e9)
         attention_scores = attention_scores.softmax(dim = -1)
         output = attention_scores @ v  #  (heads,nodebatch,nodebatch)*(heads,nodebatch,head_size)
