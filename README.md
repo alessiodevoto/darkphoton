@@ -17,3 +17,4 @@ dataset = DarkPhotonDataset(
     verbose=True
 )
 ```
+Here some visualization of the datas (both as images and graphs)
