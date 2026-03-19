@@ -18,3 +18,6 @@ dataset = DarkPhotonDataset(
 )
 ```
 Here some visualization of the datas (both as images and graphs)
+<img src="images/image_version.png" >
+<img src="images/graph_version.png" >
+
