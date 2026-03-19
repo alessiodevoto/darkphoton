@@ -18,6 +18,8 @@ dataset = DarkPhotonDataset(
 )
 ```
 Here some visualization of the datas (both as images and graphs)
-<img src="images/image_version.png" >
-<img src="images/graph_version.png" >
+<div style="display: flex; gap: 16px; align-items: flex-start;">
+  <img src="images/image_version.png" style="width: 48%;">
+  <img src="images/graph_version.png" style="width: 48%;">
+</div>
 
