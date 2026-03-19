@@ -1,7 +1,7 @@
 ## Dark Photon dataset
 Manipulate dark photon calorimeter deposits via graphs.
 
-##TL;DR
+## TL;DR
 The dataset is encoded as a Pytorch Geometric Dataset, allows you to download a dataset of graphs representing collisions.
 
 ```python
