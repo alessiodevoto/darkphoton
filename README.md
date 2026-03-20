@@ -20,7 +20,7 @@ dataset = DarkPhotonDataset(
 Here some visualization of the datas (both as images and graphs)
 <div style="display: flex; gap: 16px; align-items: flex-start;">
   <img src="images/image_version.png" style="width: 49%;">
-  <img src="images/graph_version2.png" style="width: 48%;">
+  <img src="images/graph_version2.png" style="width: 49%;">
 </div>
 
 Implementation of various graph model can be found at [this link](https://github.com/DonatellaGenovese/Transformer-for-DarkPhoton-Identification)
