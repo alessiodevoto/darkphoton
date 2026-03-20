@@ -1,4 +1,4 @@
-## Dark Photon dataset
+## Dark Photon Dataset
 Manipulate dark photon calorimeter deposits via graphs.
 
 ## TL;DR
